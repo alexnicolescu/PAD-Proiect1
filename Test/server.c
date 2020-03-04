@@ -44,14 +44,15 @@ int main(void){
 	//primul argument e descriptorul socket-ului initial
 	//al doilea argument va contine adresa si portul procesului client
 	//al treilea argument e lungimea in octeti a argumentului anterior
-	while((nread=stream_read(connfd,(void*)buf,1024))){
+	nread=read(connfd,(void*)buf,1024);
 		buf[nread]='\0';
 		printf("%s\n",buf);
-	}
+	
 	if(nread<0)
 	{
 		printf("Eroare la citirea de la retea\n");
 	}
+	write(connfd,(void*)buf,strlen(buf));
 	close(connfd);
 	close(sockfd);
 	exit(0);
