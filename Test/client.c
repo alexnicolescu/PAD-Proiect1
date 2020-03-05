@@ -26,9 +26,11 @@ int main(int argc,char*argv[]){
 	set_addr(&remote_addr,SERVERADDRESS,0,SERVERPORT);
 	connect(sockfd,(struct sockaddr*)&remote_addr,sizeof(remote_addr));
 	send(sockfd,buf,strlen(buf),0);
+        while(1){
 	nread=read(sockfd,(void*)buf2,1024);
 	buf2[nread]='\0';
-	printf("%s\n",buf2);
+        if(nread>0)
+	printf("%s\n",buf2);}
 	close(sockfd);
 	exit(0);
 }
