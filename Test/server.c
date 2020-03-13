@@ -92,7 +92,7 @@ int main(void)
       exit(errorCode--);
     }
     buf[nread]='\0';
-    printf("Message from a client:%s\n",buf);
+    printf("%s\n",buf);
     lseek(fd,0,SEEK_SET);
     while((l=read(fd,(void*)s,sizeof(char)))>0)
     {
