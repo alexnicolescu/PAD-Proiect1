@@ -9,7 +9,7 @@
 #include<stdlib.h>
 #include <sys/stat.h>
 #include <fcntl.h>
-#include <signal.h>
+
 #include "netio.h"
 
 #define SERVER_PORT 5678
@@ -60,6 +60,7 @@ int main(void)
   openFile();
   for(;;)
   {
+  
    if((connfd=accept(sockfd,(struct sockaddr *)&rmt_addr,&rlen))==-1)
    {
     perror("Unable to accept a conection on this socket");
