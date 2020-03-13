@@ -84,6 +84,7 @@ int main(int argc,char*argv[]){
 			exit(errorCode--);
 		}
 	}
+	handleSIGCHLD();
 	while(1){
 		nread=read(sockfd,(void*)buf2,1024);
 		if(nread<=0)
