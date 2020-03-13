@@ -15,7 +15,6 @@
 int sockfd,nread,errorCode=-1;
 char buf[1024],buf2[1024];
 struct sockaddr_in local_addr,remote_addr;
-FILE *users_fd;
 
 void connectToServer()
 {
@@ -39,11 +38,12 @@ void connectToServer()
 	}
 }
 
+char name[100],pass[100];
 
 void login() {
-char name[100],pass[100];
-char names[100][100],passwords[100][100];
-int index=0;
+	FILE *users_fd;
+	char names[100][100],passwords[100][100];
+	int index=0;
 	users_fd=fopen("users.txt","a+");
 	if(users_fd==NULL)
 	{
@@ -87,12 +87,16 @@ int index=0;
 }
 
 int main(int argc,char*argv[]){
-	
 	connectToServer();
 	login();
-	printf("Mesesage:\n");
-	scanf("%s",buf);
+	fflush(stdin);
+	fflush(stdout);
+	getchar();
+	printf("Introduceti mesajul: ");
+	fgets(buf,1024,stdin);
 	buf[strlen(buf)-1]='\0';
+	strcpy(name,strcat(name,": "));
+	strcpy(buf,strcat(name,buf));
 	if(send(sockfd,buf,strlen(buf),0)==-1)
 	{
 		perror("Unable to send the message");
