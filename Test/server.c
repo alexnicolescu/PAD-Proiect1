@@ -9,7 +9,7 @@
 #include<stdlib.h>
 #include <sys/stat.h>
 #include <fcntl.h>
-
+#include <signal.h>
 #include "netio.h"
 
 #define SERVER_PORT 5678
@@ -18,7 +18,7 @@ int sockfd,connfd;
 char buf[1024];
 int fd,n,l,status;
 struct sockaddr_in local_addr,rmt_addr;
-int nread,p=0;
+int nread;
 char s[10];
 socklen_t rlen;
 pid_t pid;
@@ -60,7 +60,6 @@ int main(void)
   openFile();
   for(;;)
   {
-   p++;
    if((connfd=accept(sockfd,(struct sockaddr *)&rmt_addr,&rlen))==-1)
    {
     perror("Unable to accept a conection on this socket");
@@ -117,6 +116,4 @@ if(close(connfd)==-1)
   perror("Unable to close the socket");
   exit(errorCode--);
 }
-for(int i=0;i<=p;i++)
-  wait(&status);
 }
