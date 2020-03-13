@@ -15,6 +15,8 @@
 int sockfd,nread,errorCode=-1;
 char buf[1024],buf2[1024];
 struct sockaddr_in local_addr,remote_addr;
+FILE *users_fd;
+
 void connectToServer()
 {
 	if((sockfd=socket(PF_INET,SOCK_STREAM,0))==-1)
@@ -38,11 +40,58 @@ void connectToServer()
 }
 
 
+void login() {
+char name[100],pass[100];
+char names[100][100],passwords[100][100];
+int index=0;
+	users_fd=fopen("users.txt","a+");
+	if(users_fd==NULL)
+	{
+		perror("File not found");
+		exit(-1);
+
+	}
+	int option=0;
+	printf("1: Cont nou \n2: Cont existent\n");
+	scanf("%d",&option);
+	fflush(stdin);
+	if(option==1) {
+		printf("Nume:\n");
+		scanf("%s",name);
+		printf("Pass:\n");
+		scanf("%s",pass);
+		fprintf(users_fd,"%s;%s;\n",name,pass);
+	}
+	else if (option==2) {
+		int gasit=0;
+		while(fscanf(users_fd,"%[^;];%[^;];\n",names[index],passwords[index])!=EOF) {
+			index++;
+		}
+		while (!gasit) {
+			printf("Introduceti un nume salvat: ");
+			scanf("%s",name);
+			for (int i=0;i<index;i++) {
+				if(!strcmp(name,names[i])) {
+					gasit=1;
+					index=i;
+				}
+			}
+		}
+		while(strcmp(pass,passwords[index])) {
+			printf("Introduceti parola: ");
+			scanf("%s",pass);
+		}
+		fseek(users_fd, 0, SEEK_SET);
+	}
+	fclose(users_fd);
+}
+
 int main(int argc,char*argv[]){
 	
 	connectToServer();
+	login();
 	printf("Mesesage:\n");
-	fgets(buf,1024,stdin);
+	scanf("%s",buf);
 	buf[strlen(buf)-1]='\0';
 	if(send(sockfd,buf,strlen(buf),0)==-1)
 	{
