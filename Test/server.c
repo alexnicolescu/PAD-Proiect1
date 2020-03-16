@@ -85,6 +85,7 @@ int main(void)
       perror("Unable to close the socket");
       exit(errorCode--);
     }
+    while(1){
     nread=read(connfd,(void*)buf,1024);
     if(nread<=0)
     {
@@ -103,6 +104,7 @@ int main(void)
         perror("Unable to send the message to other clients");
         exit(errorCode--);
       }
+    }
     }
     exit(0);
   }

@@ -13,8 +13,8 @@
 #define SERVERADDRESS "127.0.0.1" //Valoarea trebuie inlocuita cu adresa calculatorului pe care ruleaza serverul
 #define SERVERPORT 5678
 
-int sockfd,nread,errorCode=-1;
-char buf[1024],buf2[1024];
+int sockfd,nread,errorCode=-1,n=0;
+char buf[1024],buf2[1024],s1[1024],sir[1024];
 struct sockaddr_in local_addr,remote_addr;
 pid_t pid;
 
@@ -112,49 +112,77 @@ void login() {
 	fclose(users_fd);
 }
 
-int main(int argc,char*argv[]){
-	connectToServer();
+
+void readMessage()
+{
+    while(1)
+    {
+      nread=read(sockfd,(void*)buf2,1024);
+      if(nread<=0)
+      {
+       perror("Unable to read/No more information to read");
+       exit(errorCode--);
+      }
+      buf2[nread]='\0';
+      if(nread>0)
+      {
+        for(int i=0;i<strlen(buf2);i++)
+           { 
+            if(buf2[i]=='\n')
+              {
+               sir[n]='\0';
+               printf("%s\n",sir);
+               n=0;
+               strcpy(sir,"");
+              }
+             else
+              {
+               sir[n]=buf2[i];
+               n++;
+              }
+           }
+      }
+    }
+}
+
+void writeMessage()
+{
+   while(1)
+   { fflush(stdin);
+     fflush(stdout);
+     fgets(buf,1024,stdin);
+     buf[strlen(buf)-1]='\0';
+     strcpy(s1,name);
+     strcpy(s1,strcat(s1,": "));
+     strcpy(buf,strcat(s1,buf));
+     strcat(buf,"\n");
+     if(send(sockfd,buf,strlen(buf),0)==-1)
+     {perror("Unable to send the message");
+      exit(errorCode--); 
+     }
+   }
+}
+
+int main(int argc,char*argv[]){	
+        connectToServer();
 	login();
-	pid=fork();
+        getchar();
+        pid=fork();
 	if(pid<0)
 	{
 		perror("Unable to create a child process");
 		exit(errorCode--);
 	}
-	if(pid==0)
-	{
-		fflush(stdin);
-		fflush(stdout);
-		getchar();
-		printf("Introduceti mesajul: ");
-		fgets(buf,1024,stdin);
-		buf[strlen(buf)-1]='\0';
-		strcpy(name,strcat(name,": "));
-		strcpy(buf,strcat(name,buf));
-		if(send(sockfd,buf,strlen(buf),0)==-1)
-		if(send(sockfd,buf,strlen(buf),0)==-1)
-		{
-			perror("Unable to send the message");
-			exit(errorCode--);
-		}
-	}
-	handleSIGCHLD();
-	while(1){
-		nread=read(sockfd,(void*)buf2,1024);
-		if(nread<=0)
-		{
-			perror("Unable to read/No more information to read");
-			exit(errorCode--);
-		}
-		buf2[nread]='\0';
-		if(nread>0){
-
-			printf("%s\n",buf2);}
-		}
-		if(close(sockfd)==-1)
-		{
-			perror("Unable to close the socket");
-			exit(errorCode--);
-		}
-		exit(0);
-	}
+	if(pid==0){
+           readMessage();
+           exit(0);}
+                   
+        
+	writeMessage();	
+	
+        if(close(sockfd)==-1)
+        {
+         perror("Unable to close the socket");
+         exit(errorCode--);
+        }
+}
