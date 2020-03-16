@@ -10,6 +10,7 @@
 #include<string.h>
 #include "netio.h"
 #include <sys/wait.h>
+#include <ctype.h>
 #define SERVERADDRESS "127.0.0.1" //Valoarea trebuie inlocuita cu adresa calculatorului pe care ruleaza serverul
 #define SERVERPORT 5678
 
@@ -50,7 +51,7 @@ void sigchldHandler(int signal)
 		exit(errorCode--);
 	}
 }
-char name[100],pass[100];
+char name[100],pass[100],info[256];
 
 void handleSIGCHLD()
 {
@@ -64,52 +65,122 @@ void handleSIGCHLD()
 		exit(errorCode--);
 	}
 }
-
-
-void login() {
-	FILE *users_fd;
-	char names[100][100],passwords[100][100];
-	int index=0;
-	users_fd=fopen("users.txt","a+");
-	if(users_fd==NULL)
+void nameAlreadyExists(int option)
+{
+	while(option==-1)
 	{
-		perror("File not found");
-		exit(-1);
-
+		strcpy(name,"");
+		printf("Name already exists,enter a new one:\n");
+		scanf("%s",name);
+		fflush(stdin);
+		if(send(sockfd,(void*)name,strlen(name),0)==-1)
+		{
+			perror("Unable to send the name via socket");
+			exit(errorCode--);
+		}
+		nread=read(sockfd,(void*)(&option),sizeof(int));
+		if(nread<0)
+		{
+			perror("Unable to read name already exists code");
+			exit(errorCode--);
+		}
 	}
-	int option=0;
-	printf("1: Cont nou \n2: Cont existent\n");
-	scanf("%d",&option);
-	fflush(stdin);
-	if(option==1) {
-		printf("Nume:\n");
+}
+void existingUser(int option)
+{
+	int size;
+	while(option==-1)
+	{
+		strcpy(info,"");
+		strcpy(name,"");
+		strcpy(pass,"");
+		printf("User doesn't exist\n");
+		printf("Name:\n");
 		scanf("%s",name);
 		printf("Pass:\n");
 		scanf("%s",pass);
-		fprintf(users_fd,"%s;%s;\n",name,pass);
-	}
-	else if (option==2) {
-		int gasit=0;
-		while(fscanf(users_fd,"%[^;];%[^;];\n",names[index],passwords[index])!=EOF) {
-			index++;
+		size=strlen(name)+strlen(pass)+2;
+		snprintf(info,size,"%s %s",name,pass);
+		if(send(sockfd,(void*)info,strlen(info),0)==-1)
+		{
+			perror("Unable to send the credentials via socket");
+			exit(errorCode--);
 		}
-		while (!gasit) {
-			printf("Introduceti un nume salvat: ");
+		nread=read(sockfd,(void*)(&option),sizeof(int));
+		if(nread<0)
+		{
+			perror("Unable to read name already exists code");
+			exit(errorCode--);
+		}
+	}
+
+}
+
+void login() {
+	printf("Select an option\n1.Create a new account\n2.Login using an existing account\n");
+	int option;
+	scanf("%d",&option);
+	fflush(stdin);
+	if(send(sockfd,(void*)(&option),sizeof(option),0)==-1)
+	{
+		perror("Unable to use the socket");
+		exit(errorCode--);
+	}
+	if(option==1)
+	{
+		printf("Name:\n");
+		scanf("%s",name);
+		fflush(stdin);
+		if(send(sockfd,(void*)name,strlen(name),0)==-1)
+		{
+			perror("Unable to send the name via socket");
+			exit(errorCode--);
+		}
+		nread=read(sockfd,(void*)(&option),sizeof(int));
+		if(nread<0)
+		{
+			perror("Unable to read the name already exists code");
+			exit(errorCode--);
+		}
+		nameAlreadyExists(option);
+		printf("Pass:\n");
+		scanf("%s",pass);
+		if(send(sockfd,(void*)pass,strlen(pass),0)==-1)
+		{
+			perror("Unable to send the password via socket");
+			exit(errorCode--);
+		}
+		
+	}
+	else
+	{
+		if(option==2)
+		{
+			printf("Name:\n");
 			scanf("%s",name);
-			for (int i=0;i<index;i++) {
-				if(!strcmp(name,names[i])) {
-					gasit=1;
-					index=i;
-				}
-			}
-		}
-		while(strcmp(pass,passwords[index])) {
-			printf("Introduceti parola: ");
+			printf("Pass:\n");
 			scanf("%s",pass);
+			fflush(stdin);
+			int size=strlen(name)+strlen(pass)+2;
+			snprintf(info,size,"%s %s",name,pass);
+			if(send(sockfd,(void*)info,strlen(info),0)==-1)
+			{
+				perror("Unable to send the credentials");
+				exit(errorCode--);
+			}
+			nread=read(sockfd,(void*)(&option),sizeof(int));
+			if(nread<0)
+			{
+				perror("Unable to read the name already exists code");
+				exit(errorCode--);
+			}
+			existingUser(option);
 		}
-		fseek(users_fd, 0, SEEK_SET);
 	}
-	fclose(users_fd);
+	fflush(stdin);
+	fflush(stdout);
+	
+	
 }
 
 int main(int argc,char*argv[]){
@@ -132,16 +203,17 @@ int main(int argc,char*argv[]){
 		strcpy(name,strcat(name,": "));
 		strcpy(buf,strcat(name,buf));
 		if(send(sockfd,buf,strlen(buf),0)==-1)
-		if(send(sockfd,buf,strlen(buf),0)==-1)
 		{
 			perror("Unable to send the message");
 			exit(errorCode--);
 		}
+		exit(0);
 	}
 	handleSIGCHLD();
 	while(1){
+		sleep(2);
 		nread=read(sockfd,(void*)buf2,1024);
-		if(nread<=0)
+		if(nread<0)
 		{
 			perror("Unable to read/No more information to read");
 			exit(errorCode--);

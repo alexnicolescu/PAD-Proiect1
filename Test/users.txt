@@ -1,3 +1,0 @@
-nume;parola;
-nume2;pass2;
-nume3;pass3;

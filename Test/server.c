@@ -53,14 +53,131 @@ void openFile()
 
   }
 }
+void getName(char *info,char *name)
+{
+  int i=0;
+  while(1)
+  {
+    if(info[i]==' ')
+    {
+      break;
+    }
+    name[i]=info[i];
+    i++;
+  }
+  name[i]='\0';
+}
+void getPass(char *info,char *pass)
+{
+  int n=strlen(info);
+  int ok=0,i=0,j=0;
+  while(i!=n)
+  {
+    if(info[i]==' ')
+    {
+      ok=1;
+    }
+    if(ok==1)
+    {
+      pass[j]=info[i];
+      j++;
+    }
+    i++;
+  }
+  pass[j]='\0';
+}
+int searchName(FILE *f,char *name)
+{
+  char info[256];
+  char cname[100];
+  while(fgets(info,256,f))
+  {
+    info[strlen(info)-1]='\0';
+    getName(info,cname);
+    if(strcmp(name,cname)==0)
+      return 1;
+  }
+  fseek(f,0,SEEK_SET);
+  return 0;
 
+}
+void validName(char *name,FILE *f)
+{
+  int option;
+  while(searchName(f,name))
+  {
+    option=-1;
+    if(send(connfd,(void*)(&option),sizeof(int),0)==-1)
+    {
+      perror("Unable to send the name already exists code");
+      exit(errorCode--);
+    }
+    strcpy(name,"");
+    nread=read(connfd,(void*)name,100);
+    if(nread<0)
+    {
+      perror("Unable to read the name from socket");
+      exit(errorCode--);
+    }
+    name[nread]='\0';
+  }
+  option=1;
+  if(send(connfd,(void*)(&option),sizeof(int),0)==-1)
+  {
+    perror("Unable to send the name is valid code");
+    exit(errorCode--);
+  }
+}
+int existingUser(char *user,FILE *f)
+{
+  char info[256];
+  while(fgets(info,256,f))
+  {
+    info[strlen(info)-1]='\0';
+    if(strcmp(user,info)==0)
+    {
+      return 1;
+    }
+  }
+  fseek(f,0,SEEK_SET);
+  return 0;
+}
+void validUser(char *info,FILE *f)
+{
+  int option;
+  while(!existingUser(info,f))
+  {
+    option=-1;
+    if(send(connfd,(void*)(&option),sizeof(int),0)==-1)
+    {
+      perror("Unable to send the user doesn't exist code");
+      exit(errorCode--);
+    }
+    strcpy(info,"");
+    nread=read(connfd,(void*)info,256);
+    if(nread<0)
+    {
+      perror("Unable to read the credentials");
+      exit(errorCode--);
+    }
+    info[nread]='\0';
+  }
+  option=1;
+  if(send(connfd,(void*)(&option),sizeof(int),0)==-1)
+  {
+    perror("Unable to send the user is valid code");
+    exit(errorCode--);
+  }
+
+
+}
 int main(void)
 {
   prepareToReceiveRequests();
   openFile();
   for(;;)
   {
-  
+
    if((connfd=accept(sockfd,(struct sockaddr *)&rmt_addr,&rlen))==-1)
    {
     perror("Unable to accept a conection on this socket");
@@ -84,6 +201,84 @@ int main(void)
     {
       perror("Unable to close the socket");
       exit(errorCode--);
+    }
+    int option;
+    FILE *f;
+    char name[100],pass[100],info[256];
+    nread=read(connfd,(void*)(&option),sizeof(int));
+    if(nread<0)
+    {
+      perror("Unable to read information from the socket");
+      exit(errorCode--);
+    }
+    f=fopen("users.txt","r");
+    if(f==NULL)
+    {
+      perror("Unable to open the users file");
+      exit(errorCode--);
+    }
+    if(option==1)
+    {
+      nread=read(connfd,(void*)name,100);
+      if(nread<0)
+      {
+        perror("Unable to read the name from socket");
+        exit(errorCode--);
+      }
+      name[nread]='\0';
+      validName(name,f);
+      nread=read(connfd,(void*)pass,100);
+      if(nread<0)
+      {
+        perror("Unable to read the name from socket");
+        exit(errorCode--);
+      }
+      pass[nread]='\0';
+      if(fclose(f)!=0)
+      {
+        perror("Unable to close the users file");
+        exit(errorCode--);
+      }
+      f=fopen("users.txt","a");
+      if(!f)
+      {
+        perror("Unable to open the user.txt file");
+        exit(errorCode--);
+      }
+      int size;
+
+      size=strlen(name)+strlen(pass) + 2;
+      snprintf(info,size,"%s %s",name,pass);
+      fwrite(info,strlen(info),1,f);
+      fputc('\n',f);
+      // fputs(info,f);
+      if(fclose(f)!=0)
+      {
+        perror("Unable to close the users file");
+        exit(errorCode--);
+      }
+
+    }
+    else
+    {
+      if(option==2)
+      {
+        nread=read(connfd,(void*)info,256);
+        if(nread<0)
+        {
+          perror("Unable to read the credentials");
+          exit(errorCode--);
+        }
+        info[nread]='\0';
+        validUser(info,f);
+        if(fclose(f)!=0)
+        {
+          perror("Unable to close the users file");
+          exit(errorCode--);
+        }
+        getName(info,name);
+        getPass(info,pass);
+      }
     }
     nread=read(connfd,(void*)buf,1024);
     if(nread<=0)
