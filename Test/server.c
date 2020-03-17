@@ -9,6 +9,7 @@
 #include <stdlib.h>
 #include <sys/stat.h>
 #include <fcntl.h>
+#include <pthread.h>
 
 #include "netio.h"
 
@@ -17,11 +18,16 @@ int errorCode = -1;
 int sockfd, connfd;
 char buf[1024];
 int fd, n, l, status;
-struct sockaddr_in local_addr, rmt_addr;
+struct sockaddr_in local_addr;
 int nread;
 char s[10];
 socklen_t rlen;
 pid_t pid;
+typedef struct{
+  struct sockaddr_in addr;
+  int connfd;
+  }cli_t;
+
 
 void prepareToReceiveRequests()
 {
@@ -41,7 +47,7 @@ void prepareToReceiveRequests()
     perror("Unable to listen for connections on this socket");
     exit(errorCode--);
   }
-  rlen = sizeof(rmt_addr);
+ 
 }
 
 void openFile()
@@ -54,31 +60,44 @@ void openFile()
   }
 }
 
-void initializeConn()
-{
+cli_t* initializeConn()
+{  int connfd;
+   struct sockaddr_in rmt_addr;
+   rlen=sizeof(rmt_addr);
   if ((connfd = accept(sockfd, (struct sockaddr *)&rmt_addr, &rlen)) == -1)
   {
     perror("Unable to accept a conection on this socket");
     exit(errorCode--);
   }
+
+   cli_t *client=(cli_t *)malloc(sizeof(cli_t));
+   if(!client)
+    {perror("Could not allocate");
+     exit(errorCode--);
+    }
+   client->connfd=connfd;
+   client->addr=rmt_addr;
+
   snprintf(s, sizeof(int), "%d", connfd);
   if (write(fd, s, strlen(s)) == -1)
   {
     perror("Unable to write the descriptor in the file");
     exit(errorCode--);
   }
+
+  return client;
 }
 
 int option = 0;
 char credentials[256];
 char name[100], pass[100];
-void get_credentials()
+void get_credentials(cli_t* c)
 {
-  check_error(recv(connfd, credentials, 255, 0), "receive credentials");
+  check_error(recv(c->connfd, credentials, 255, 0), "receive credentials");
   sscanf(credentials, "%d;%[^;];%[^;];", &option, name, pass);
 }
 
-void login()
+void login(cli_t* c)
 {
   char res[10];
   FILE *users_fd;
@@ -90,13 +109,13 @@ void login()
     perror("File not found");
     exit(-1);
   }
-  get_credentials();
+  get_credentials(c);
   printf("daca merge... %d %s %s\n", option, name, pass);
   if (option == 1)
   {
     fprintf(users_fd, "%s;%s;\n", name, pass);
     strcpy(res, "1");
-    check_error(send(connfd, res, strlen(res), 0), "Can't send response");
+    check_error(send(c->connfd, res, strlen(res), 0), "Can't send response");
   }
   else if (option == 2)
   {
@@ -113,34 +132,30 @@ void login()
         {
           gasit = 1;
           strcpy(res, "1");
-          check_error(send(connfd, res, strlen(res), 0), "Can't send response");
+          check_error(send(c->connfd, res, strlen(res), 0), "Can't send response");
           break;
         }
       }
       strcpy(res, "0");
-      check_error(send(connfd, res, strlen(res), 0), "Can't send response");
-      get_credentials();
+      check_error(send(c->connfd, res, strlen(res), 0), "Can't send response");
+      get_credentials(c);
     }
     fseek(users_fd, 0, SEEK_SET);
   }
   fclose(users_fd);
 }
 
-void child()
+void *child(void *arg)
 {
-  login();
-  if (close(sockfd) == -1)
-  {
-    perror("Unable to close the socket");
-    exit(errorCode--);
-  }
+  cli_t *c=(cli_t *)arg;
+  login(c);
   while (1)
   {
-    nread = read(connfd, (void *)buf, 1024);
+    nread = read(c->connfd, (void *)buf, 1024);
     if (nread <= 0)
     {
       perror("Unable to receive information from client");
-      exit(errorCode--);
+      pthread_exit(NULL);
     }
     buf[nread] = '\0';
     printf("%s\n", buf);
@@ -156,7 +171,7 @@ void child()
       }
     }
   }
-  exit(0);
+  pthread_exit(NULL);
 }
 
 int main(void)
@@ -164,18 +179,12 @@ int main(void)
   prepareToReceiveRequests();
   openFile();
   for (;;)
-  {
-    initializeConn();
-    pid = fork();
-    if (pid == -1)
-    {
-      perror("Unable to create a child process");
-      exit(errorCode--);
-    }
-    if (pid == 0)
-    {
-      child();
-    }
+  { pthread_t tid;
+    cli_t* client=initializeConn();
+    if(pthread_create(&tid, NULL, child, (void *)client)<0)
+   { perror("Unable to create new thread");
+     exit(errorCode--);
+   }
   }
   if (close(fd) == -1)
   {
