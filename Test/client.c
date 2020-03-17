@@ -84,7 +84,7 @@ void login()
 		check_error(send(sockfd, (void *)message, strlen(message), 0), "Can't send credentials");
 		check_error(recv(sockfd, buf, sizeof(int), 0), "Can't receive credentials");
 		logged_in=atoi(buf);
-		printf("am primimt raspuns: %d\n", logged_in);
+		// printf("am primimt raspuns: %d\n", logged_in);
 	}
 }
 
@@ -144,7 +144,7 @@ int main(int argc, char *argv[])
 {
 	connectToServer();
 	login();
-	getchar();
+	// getchar();
 	pid = fork();
 	if (pid < 0)
 	{
