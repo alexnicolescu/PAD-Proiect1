@@ -4,8 +4,19 @@
 #include<string.h>
 #include<unistd.h>
 #include<netdb.h>
+#include <stdio.h>
+#include <stdlib.h>
 
 #include "netio.h"
+
+void check_error(int action, char *message)
+{
+	if (action < 0)
+	{
+		perror(message);
+		exit(-1);
+	}
+}
 
 int set_addr(struct sockaddr_in *addr,char *name,uint32_t inaddr,short sin_port){
 	struct hostent *h;
