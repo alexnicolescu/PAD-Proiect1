@@ -49,6 +49,12 @@ void sigchldHandler(int signal)
 		perror("Child process ended with an error");
 		exit(errorCode--);
 	}
+	if (close(sockfd) == -1)
+	{
+		perror("Unable to close the socket");
+		exit(errorCode--);
+	}
+	exit(0);
 }
 char name[100], pass[100];
 
@@ -128,6 +134,15 @@ void writeMessage()
 		fflush(stdout);
 		fgets(buf, 1024, stdin);
 		buf[strlen(buf) - 1] = '\0';
+		if(strcmp(buf,"exit")==0)
+		{	
+			if(kill(pid,SIGUSR1))
+			{
+				perror("Unable to send SIGURS1 signal to the child process");
+				exit(errorCode--);
+			}
+			break;
+		}
 		strcpy(s1, name);
 		strcpy(s1, strcat(s1, ": "));
 		strcpy(buf, strcat(s1, buf));
@@ -137,6 +152,24 @@ void writeMessage()
 			perror("Unable to send the message");
 			exit(errorCode--);
 		}
+	}
+}
+void handlerSIGUSR1(int signal){
+	if(close(sockfd)==-1){
+		perror("Unable to close the socket in the child process");
+		exit(errorCode--);
+	}
+	exit(0);
+}
+void listenForSIGUSR1(){
+	struct sigaction sig;
+	sig.sa_flags=0;
+	sigemptyset(&(sig.sa_mask));
+	sig.sa_handler=handlerSIGUSR1;
+	if(sigaction(SIGUSR1,&sig,NULL)<0)
+	{
+		perror("SIGUSR1 error");
+		exit(errorCode--);
 	}
 }
 
@@ -153,15 +186,9 @@ int main(int argc, char *argv[])
 	}
 	if (pid == 0)
 	{
+		listenForSIGUSR1();
 		readMessage();
-		exit(0);
 	}
-
+	handleSIGCHLD();
 	writeMessage();
-
-	if (close(sockfd) == -1)
-	{
-		perror("Unable to close the socket");
-		exit(errorCode--);
-	}
 }

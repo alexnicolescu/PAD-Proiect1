@@ -110,7 +110,7 @@ void login(cli_t* c)
     exit(-1);
   }
   get_credentials(c);
-  printf("daca merge... %d %s %s\n", option, name, pass);
+  // printf("daca merge... %d %s %s\n", option, name, pass);
   if (option == 1)
   {
     fprintf(users_fd, "%s;%s;\n", name, pass);
@@ -154,7 +154,6 @@ void *child(void *arg)
     nread = read(c->connfd, (void *)buf, 1024);
     if (nread <= 0)
     {
-      perror("Unable to receive information from client");
       pthread_exit(NULL);
     }
     buf[nread] = '\0';
