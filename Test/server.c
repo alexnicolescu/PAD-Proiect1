@@ -52,7 +52,7 @@ void prepareToReceiveRequests()
 
 void openFile()
 {
-  fd = open("socketDescriptors.txt", O_RDWR | O_APPEND | O_TRUNC);
+  fd = open("socketDescriptors.txt", O_RDWR | O_APPEND | O_TRUNC | O_CREAT);
   if (fd == -1)
   {
     perror("File not found");
@@ -110,7 +110,6 @@ void login(cli_t* c)
     exit(-1);
   }
   get_credentials(c);
-  // printf("daca merge... %d %s %s\n", option, name, pass);
   if (option == 1)
   {
     fprintf(users_fd, "%s;%s;\n", name, pass);
