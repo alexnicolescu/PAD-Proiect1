@@ -84,6 +84,7 @@ void login()
 		scanf("%s", name);
 		printf("Pass:\n");
 		scanf("%s", pass);
+		getchar();
 		char message[256];
 		snprintf(message, 255, "%d;%s;%s;", option, name, pass);
 		check_error(send(sockfd, (void *)message, strlen(message), 0), "Can't send credentials");
