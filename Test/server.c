@@ -52,7 +52,7 @@ void prepareToReceiveRequests()
 
 void openFile()
 {
-  fd = open("socketDescriptors.txt", O_RDWR | O_APPEND | O_TRUNC | O_CREAT);
+  fd = open("socketDescriptors.txt", O_RDWR | O_APPEND | O_TRUNC | O_CREAT,0777);
   if (fd == -1)
   {
     perror("File not found");
