@@ -96,7 +96,17 @@ void get_credentials(cli_t* c)
   check_error(recv(c->connfd, credentials, 255, 0), "receive credentials");
   sscanf(credentials, "%d;%[^;];%[^;];", &option, name, pass);
 }
-
+int verify_name(FILE* users_fd)
+{
+  char cname[100],cpass[100];
+  fseek(users_fd,0,SEEK_SET);
+  while(fscanf(users_fd,"%[^;];%[^;];\n", cname, cpass)!=EOF)
+  {
+    if(strcmp(name,cname)==0)
+      return 1;
+  }
+  return 0;
+}
 void login(cli_t* c)
 {
   char res[10];
@@ -111,7 +121,14 @@ void login(cli_t* c)
   }
   get_credentials(c);
   if (option == 1)
-  {
+  { while(verify_name(users_fd))
+    {
+      option=0;
+      check_error(send(c->connfd,&option,sizeof(int),0),"Can't send option");
+      get_credentials(c);
+    }
+    option=1;
+    check_error(send(c->connfd,&option,sizeof(int),0),"Can't send option");
     fprintf(users_fd, "%s;%s;\n", name, pass);
     strcpy(res, "1");
     check_error(send(c->connfd, res, strlen(res), 0), "Can't send response");

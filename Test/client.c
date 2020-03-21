@@ -89,6 +89,21 @@ void login()
 		char message[256];
 		snprintf(message, 255, "%d;%s;%s;", option, name, pass);
 		check_error(send(sockfd, (void *)message, strlen(message), 0), "Can't send credentials");
+		if(option==1){
+			check_error(recv(sockfd,&option,sizeof(int),0),"Can't receive option");
+			while(option==0)
+			{
+				printf("Nume:\n");
+				scanf("%s", name);
+				printf("Pass:\n");
+				scanf("%s", pass);
+				getchar();
+				strcpy(message,"");
+				snprintf(message, 255, "%d;%s;%s;", option, name, pass);
+				check_error(send(sockfd, (void *)message, strlen(message), 0), "Can't send credentials");
+				check_error(recv(sockfd,&option,sizeof(int),0),"Can't receive option");
+			}
+		}
 		check_error(recv(sockfd, buf, sizeof(int), 0), "Can't receive credentials");
 		logged_in=atoi(buf);
 	}
