@@ -84,7 +84,8 @@ void login()
 		scanf("%s", name);
 		printf("Pass:\n");
 		scanf("%s", pass);
-		getchar();
+		if(option==1)
+			getchar();
 		char message[256];
 		snprintf(message, 255, "%d;%s;%s;", option, name, pass);
 		check_error(send(sockfd, (void *)message, strlen(message), 0), "Can't send credentials");
@@ -176,6 +177,7 @@ int main(int argc, char *argv[])
 {
 	connectToServer();
 	login();
+	printf("Bine ai venit!\n");
 	// getchar();
 	pid = fork();
 	if (pid < 0)
