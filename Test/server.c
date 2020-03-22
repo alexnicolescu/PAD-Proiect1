@@ -1,315 +1,266 @@
 #include <stdio.h>
-#include<sys/types.h>
+#include <sys/types.h>
 #include <sys/wait.h>
-#include<sys/socket.h>
-#include<netinet/in.h>
-#include<string.h>
-#include<unistd.h>
-#include<netdb.h>
-#include<stdlib.h>
+#include <sys/socket.h>
+#include <netinet/in.h>
+#include <string.h>
+#include <unistd.h>
+#include <netdb.h>
+#include <stdlib.h>
 #include <sys/stat.h>
 #include <fcntl.h>
+#include <pthread.h>
 
 #include "netio.h"
 
 #define SERVER_PORT 5678
-int errorCode=-1;
-int sockfd,connfd;
+int errorCode = -1;
+int sockfd, connfd;
 char buf[1024];
-int fd,n,l,status;
-struct sockaddr_in local_addr,rmt_addr;
+int fd, n, l, status;
+struct sockaddr_in local_addr;
 int nread;
 char s[10];
 socklen_t rlen;
 pid_t pid;
+typedef struct{
+  struct sockaddr_in addr;
+  int connfd;
+}cli_t;
+
 
 void prepareToReceiveRequests()
 {
-  if((sockfd=socket(PF_INET,SOCK_STREAM,0))==-1){
+  if ((sockfd = socket(PF_INET, SOCK_STREAM, 0)) == -1)
+  {
     perror("Unable to create a socket");
     exit(errorCode--);
   }
-  set_addr(&local_addr,NULL,INADDR_ANY,SERVER_PORT);
-  if(bind(sockfd,(struct sockaddr *)&local_addr,sizeof(local_addr))==-1)
+  set_addr(&local_addr, NULL, INADDR_ANY, SERVER_PORT);
+  if (bind(sockfd, (struct sockaddr *)&local_addr, sizeof(local_addr)) == -1)
   {
     perror("Unable to bind a name to the socket");
-    exit(errorCode--);  
+    exit(errorCode--);
   }
-  if(listen(sockfd,5)==-1)
+  if (listen(sockfd, 5) == -1)
   {
     perror("Unable to listen for connections on this socket");
     exit(errorCode--);
   }
-  rlen=sizeof(rmt_addr);
+
 }
 
 void openFile()
 {
-  fd=open("socketDescriptors.txt",O_RDWR |O_APPEND |O_TRUNC);
-  if(fd==-1)
+  fd = open("socketDescriptors.txt", O_RDWR | O_APPEND | O_TRUNC | O_CREAT,0777);
+  if (fd == -1)
   {
     perror("File not found");
     exit(errorCode--);
+  }
+}
 
-  }
+cli_t* initializeConn()
+{  int connfd;
+ struct sockaddr_in rmt_addr;
+ rlen=sizeof(rmt_addr);
+ if ((connfd = accept(sockfd, (struct sockaddr *)&rmt_addr, &rlen)) == -1)
+ {
+  perror("Unable to accept a conection on this socket");
+  exit(errorCode--);
 }
-void getName(char *info,char *name)
-{
-  int i=0;
-  while(1)
-  {
-    if(info[i]==' ')
-    {
-      break;
-    }
-    name[i]=info[i];
-    i++;
-  }
-  name[i]='\0';
+
+cli_t *client=(cli_t *)malloc(sizeof(cli_t));
+if(!client)
+  {perror("Could not allocate");
+exit(errorCode--);
 }
-void getPass(char *info,char *pass)
+client->connfd=connfd;
+client->addr=rmt_addr;
+
+snprintf(s, sizeof(int)+1, "%d\n", connfd);
+if (write(fd, s, strlen(s)) == -1)
 {
-  int n=strlen(info);
-  int ok=0,i=0,j=0;
-  while(i!=n)
-  {
-    if(info[i]==' ')
-    {
-      ok=1;
-    }
-    if(ok==1)
-    {
-      pass[j]=info[i];
-      j++;
-    }
-    i++;
-  }
-  pass[j]='\0';
+  perror("Unable to write the descriptor in the file");
+  exit(errorCode--);
 }
-int searchName(FILE *f,char *name)
+
+return client;
+}
+
+int option = 0;
+char credentials[256];
+char name[100], pass[100];
+void get_credentials(cli_t* c)
 {
-  char info[256];
-  char cname[100];
-  while(fgets(info,256,f))
+  check_error(recv(c->connfd, credentials, 255, 0), "receive credentials");
+  sscanf(credentials, "%d;%[^;];%[^;];", &option, name, pass);
+}
+int verify_name(FILE* users_fd)
+{
+  char cname[100],cpass[100];
+  fseek(users_fd,0,SEEK_SET);
+  while(fscanf(users_fd,"%[^;];%[^;];\n", cname, cpass)!=EOF)
   {
-    info[strlen(info)-1]='\0';
-    getName(info,cname);
     if(strcmp(name,cname)==0)
       return 1;
   }
-  fseek(f,0,SEEK_SET);
-  return 0;
-
-}
-void validName(char *name,FILE *f)
-{
-  int option;
-  while(searchName(f,name))
-  {
-    option=-1;
-    if(send(connfd,(void*)(&option),sizeof(int),0)==-1)
-    {
-      perror("Unable to send the name already exists code");
-      exit(errorCode--);
-    }
-    strcpy(name,"");
-    nread=read(connfd,(void*)name,100);
-    if(nread<0)
-    {
-      perror("Unable to read the name from socket");
-      exit(errorCode--);
-    }
-    name[nread]='\0';
-  }
-  option=1;
-  if(send(connfd,(void*)(&option),sizeof(int),0)==-1)
-  {
-    perror("Unable to send the name is valid code");
-    exit(errorCode--);
-  }
-}
-int existingUser(char *user,FILE *f)
-{
-  char info[256];
-  while(fgets(info,256,f))
-  {
-    info[strlen(info)-1]='\0';
-    if(strcmp(user,info)==0)
-    {
-      return 1;
-    }
-  }
-  fseek(f,0,SEEK_SET);
   return 0;
 }
-void validUser(char *info,FILE *f)
+void login(cli_t* c)
 {
-  int option;
-  while(!existingUser(info,f))
+  char res[10];
+  FILE *users_fd;
+  char names[100][100], passwords[100][100];
+  int index = 0;
+  users_fd = fopen("users.txt", "a+");
+  if (users_fd == NULL)
   {
-    option=-1;
-    if(send(connfd,(void*)(&option),sizeof(int),0)==-1)
+    perror("File not found");
+    exit(-1);
+  }
+  get_credentials(c);
+  if (option == 1)
+    { while(verify_name(users_fd))
+      {
+        option=0;
+        check_error(send(c->connfd,&option,sizeof(int),0),"Can't send option");
+        get_credentials(c);
+      }
+      option=1;
+      check_error(send(c->connfd,&option,sizeof(int),0),"Can't send option");
+      fprintf(users_fd, "%s;%s;\n", name, pass);
+      strcpy(res, "1");
+      check_error(send(c->connfd, res, strlen(res), 0), "Can't send response");
+    }
+    else if (option == 2)
     {
-      perror("Unable to send the user doesn't exist code");
+      int gasit = 0;
+      while (fscanf(users_fd, "%[^;];%[^;];\n", names[index], passwords[index]) != EOF)
+      {
+        index++;
+      }
+      while (!gasit)
+      {
+        for (int i = 0; i < index; i++)
+        {
+          if (!strcmp(name, names[i]) && !strcmp(pass, passwords[i]))
+          {
+            gasit = 1;
+            strcpy(res, "1");
+            check_error(send(c->connfd, res, strlen(res), 0), "Can't send response");
+            break;
+          }
+        }
+        strcpy(res, "0");
+        check_error(send(c->connfd, res, strlen(res), 0), "Can't send response");
+        get_credentials(c);
+      }
+      fseek(users_fd, 0, SEEK_SET);
+    }
+    fclose(users_fd);
+  }
+  void deleteDescriptorFromFile(int des)
+  {
+    FILE *f,*o;
+    char str[100];
+    f=fopen("socketDescriptors.txt","r");
+    if(!f)
+    {
+      perror("Unable to open the file");
       exit(errorCode--);
     }
-    strcpy(info,"");
-    nread=read(connfd,(void*)info,256);
-    if(nread<0)
+    o=fopen("test.txt","w");
+    if(!o)
     {
-      perror("Unable to read the credentials");
+      perror("Unable to open the file");
       exit(errorCode--);
     }
-    info[nread]='\0';
+    while(fgets(str,100,f))
+    {
+      str[strlen(str)-1]='\0';
+      if(atoi(str)!=des)
+      {
+        fputs(str,o);
+        fputc('\n',o);
+      }
+      strcpy(s,"");
+    }
+    if(fclose(f)!=0)
+    {
+      perror("Unable to close the file");
+      exit(errorCode);
+    }
+    if(fclose(o)!=0)
+    {
+      perror("Unable to close the file");
+      exit(errorCode);
+    }
+    unlink("socketDescriptors.txt");
+    rename("test.txt","socketDescriptors.txt");
+
+    fd = open("socketDescriptors.txt", O_RDWR | O_APPEND);
+    if (fd == -1)
+    {
+      perror("File not found");
+      exit(errorCode--);
+    }
   }
-  option=1;
-  if(send(connfd,(void*)(&option),sizeof(int),0)==-1)
+
+  void *child(void *arg)
   {
-    perror("Unable to send the user is valid code");
-    exit(errorCode--);
+    cli_t *c=(cli_t *)arg;
+    login(c);
+    while (1)
+    {
+      strcpy(buf,"");
+      nread = read(c->connfd, (void *)buf, 1024);
+      if (nread <= 0)
+      {
+        pthread_exit(NULL);
+      }
+      buf[nread] = '\0';
+      if(strcmp(buf,"exit")==0)
+      {
+        deleteDescriptorFromFile(c->connfd);
+        pthread_exit(NULL);
+      }
+      // printf("%s\n", buf);
+      lseek(fd, 0, SEEK_SET);
+      while ((l = read(fd, (void *)s, sizeof(char))) > 0)
+      {
+        s[l] = '\0';
+        n = atoi(s);
+        if (write(n, (void *)buf, strlen(buf)) == -1)
+        {
+          perror("Unable to send the message to other clients");
+          exit(errorCode--);
+        }
+      }
+    }
+    pthread_exit(NULL);
   }
 
-
-}
-int main(void)
-{
-  prepareToReceiveRequests();
-  openFile();
-  for(;;)
+  int main(void)
   {
-
-   if((connfd=accept(sockfd,(struct sockaddr *)&rmt_addr,&rlen))==-1)
+    prepareToReceiveRequests();
+    openFile();
+    for (;;)
+      { pthread_t tid;
+        cli_t* client=initializeConn();
+        if(pthread_create(&tid, NULL, child, (void *)client)<0)
+         { perror("Unable to create new thread");
+       exit(errorCode--);
+     }
+   }
+   if (close(fd) == -1)
    {
-    perror("Unable to accept a conection on this socket");
+    perror("Unable to close the file");
     exit(errorCode--);
   }
-  snprintf(s,sizeof(int),"%d",connfd);
-  if(write(fd,s,strlen(s))==-1)
+  if (close(connfd) == -1)
   {
-    perror("Unable to write the descriptor in the file");
+    perror("Unable to close the socket");
     exit(errorCode--);
   }
-  pid=fork();
-  if(pid==-1)
-  {
-    perror("Unable to create a child process");
-    exit(errorCode--);
-  }
-  if(pid==0)
-  {
-    if(close(sockfd)==-1)
-    {
-      perror("Unable to close the socket");
-      exit(errorCode--);
-    }
-    int option;
-    FILE *f;
-    char name[100],pass[100],info[256];
-    nread=read(connfd,(void*)(&option),sizeof(int));
-    if(nread<0)
-    {
-      perror("Unable to read information from the socket");
-      exit(errorCode--);
-    }
-    f=fopen("users.txt","r");
-    if(f==NULL)
-    {
-      perror("Unable to open the users file");
-      exit(errorCode--);
-    }
-    if(option==1)
-    {
-      nread=read(connfd,(void*)name,100);
-      if(nread<0)
-      {
-        perror("Unable to read the name from socket");
-        exit(errorCode--);
-      }
-      name[nread]='\0';
-      validName(name,f);
-      nread=read(connfd,(void*)pass,100);
-      if(nread<0)
-      {
-        perror("Unable to read the name from socket");
-        exit(errorCode--);
-      }
-      pass[nread]='\0';
-      if(fclose(f)!=0)
-      {
-        perror("Unable to close the users file");
-        exit(errorCode--);
-      }
-      f=fopen("users.txt","a");
-      if(!f)
-      {
-        perror("Unable to open the user.txt file");
-        exit(errorCode--);
-      }
-      int size;
-
-      size=strlen(name)+strlen(pass) + 2;
-      snprintf(info,size,"%s %s",name,pass);
-      fwrite(info,strlen(info),1,f);
-      fputc('\n',f);
-      // fputs(info,f);
-      if(fclose(f)!=0)
-      {
-        perror("Unable to close the users file");
-        exit(errorCode--);
-      }
-
-    }
-    else
-    {
-      if(option==2)
-      {
-        nread=read(connfd,(void*)info,256);
-        if(nread<0)
-        {
-          perror("Unable to read the credentials");
-          exit(errorCode--);
-        }
-        info[nread]='\0';
-        validUser(info,f);
-        if(fclose(f)!=0)
-        {
-          perror("Unable to close the users file");
-          exit(errorCode--);
-        }
-        getName(info,name);
-        getPass(info,pass);
-      }
-    }
-    nread=read(connfd,(void*)buf,1024);
-    if(nread<=0)
-    {
-      perror("Unable to receive information from client");
-      exit(errorCode--);
-    }
-    buf[nread]='\0';
-    printf("%s\n",buf);
-    lseek(fd,0,SEEK_SET);
-    while((l=read(fd,(void*)s,sizeof(char)))>0)
-    {
-      s[l]='\0';
-      n=atoi(s);
-      if(write(n,(void*)buf,strlen(buf))==-1)
-      {
-        perror("Unable to send the message to other clients");
-        exit(errorCode--);
-      }
-    }
-    exit(0);
-  }
-}
-if(close(fd)==-1)
-{
-  perror("Unable to close the file");
-  exit(errorCode--);
-}
-if(close(connfd)==-1)
-{
-  perror("Unable to close the socket");
-  exit(errorCode--);
-}
 }
