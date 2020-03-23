@@ -151,6 +151,7 @@ void writeMessage()
 		buf[strlen(buf) - 1] = '\0';
 		if(strcmp(buf,"exit")==0)
 		{	
+			check_error(send(sockfd,(void*)buf,strlen(buf),0),"Unable to send the message");
 			if(kill(pid,SIGUSR1))
 			{
 				perror("Unable to send SIGURS1 signal to the child process");
@@ -187,9 +188,22 @@ void listenForSIGUSR1(){
 		exit(errorCode--);
 	}
 }
+void ignoreSIGINT()
+{
+	struct sigaction sig;
+	sig.sa_flags=0;
+	sigemptyset(&(sig.sa_mask));
+	sig.sa_handler=SIG_IGN;
+	if(sigaction(SIGINT,&sig,NULL)<0)
+	{
+		perror("SIGINT error");
+		exit(errorCode--);
+	}
+}
 
 int main(int argc, char *argv[])
 {
+	ignoreSIGINT();
 	connectToServer();
 	login();
 	printf("Bine ai venit!\n");
